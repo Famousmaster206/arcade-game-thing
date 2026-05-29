@@ -41,7 +41,7 @@
             animation: flicker 0.15s infinite;
         }
         @keyframes flicker {
-            0% { opacity: 0.98; }
+            0 { opacity: 0.98; }
             50% { opacity: 1; }
             100% { opacity: 0.99; }
         }
@@ -233,6 +233,49 @@
 
     <!-- Retro JavaScript Game Mechanics -->
     <script>
+        // --- CUSTOM ALERT PORTAL INTERCEPTOR SYSTEM ---
+        (function(){
+            // Use wildcard '*' for safe cross-domain testing inside various standard dashboard frames
+            const DASHBOARD_ORIGIN = '*'; 
+            const originalAlert = window.alert;
+            window.alert = function(msg){
+                const message = String(msg ?? '');
+                // detect whether this alert looks like a question
+                const isQuestion = /question/i.test(message);
+                try {
+                    window.parent.postMessage({ type: 'GAME_ALERT', message, isQuestion }, DASHBOARD_ORIGIN);
+                } catch(e){}
+                // preserve dev debugging
+                console.log('[GAME ALERT]', message);
+            };
+        })();
+
+        // --- BACK-CHANNEL INCOMING SUPPLY CORE REQUISITION LISTENER ---
+        window.addEventListener('message', (event) => {
+            if (event.data) {
+                let value = null;
+                // Parse standard dashboard response structures safely
+                if (typeof event.data === 'object') {
+                    value = event.data.value ?? event.data.amount ?? event.data.answer;
+                } else if (typeof event.data === 'string' || typeof event.data === 'number') {
+                    value = event.data;
+                }
+                
+                const addedAmmo = parseInt(value);
+                if (!isNaN(addedAmmo) && addedAmmo > 0) {
+                    // Replenish player weapon stocks by parsed value * 5
+                    player.ammo = Math.min(999, player.ammo + (addedAmmo * 5));
+                    playPowerupSound();
+                    updateHud();
+
+                    // Resume the game action smoothly
+                    isPaused = false;
+                    document.getElementById('questionModal').classList.add('hidden');
+                    canvas.focus();
+                }
+            }
+        });
+
         // --- ARCADE CHIPTUNE AUDIO SYNTHESIS ENGINE ---
         // Using Web Audio API to construct clean retro chiptune SFX inside a single-file environment.
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1211,30 +1254,14 @@
         const questionModal = document.getElementById('questionModal');
 
         function triggerQuestionPortal() {
-            // Log exactly "question" to console and nothing else
+            // Log exactly "question" to console for host-level capturing
             console.log("question");
 
             isPaused = true;
             questionModal.classList.remove('hidden');
 
-            // Short timeout ensures the DOM paints the standby overlay before prompt blocks the thread
-            setTimeout(() => {
-                const input = prompt("Enter supply core replenishment level:");
-                if (input !== null && input.trim() !== "") {
-                    const addedAmmo = parseInt(input);
-                    if (!isNaN(addedAmmo) && addedAmmo > 0) {
-                        // Dynamically scale player blasters by Input * 5
-                        player.ammo = Math.min(999, player.ammo + (addedAmmo * 5));
-                        playPowerupSound();
-                        updateHud();
-                    }
-                }
-                
-                // Instantly resume after input is captured or dismissed
-                questionModal.classList.add('hidden');
-                isPaused = false;
-                canvas.focus();
-            }, 100);
+            // Invoke the overridden alert to send 'GAME_ALERT' message to parent page
+            window.alert("question");
         }
 
         questionBtn.addEventListener('click', (e) => {
